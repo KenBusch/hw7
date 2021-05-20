@@ -39,22 +39,16 @@ exports.handler = async function(event) {
 
   // get the course number being requested
   let courseNumber = event.queryStringParameters.courseNumber
-
   // establish a connection to firebase in memory
   let db = firebase.firestore()
-
   // ask Firebase for the course that corresponds to the course number, wait for the response
   let courseQuery = await db.collection('courses').where(`courseNumber`, `==`, courseNumber).get()
-
   // get the first document from the query
   let course = courseQuery.docs[0]
-
   // get the id from the document
   let courseId = course.id
-
   // get the data from the document
   let courseData = course.data()
-
   // create an object with the course data to hold the return value from our lambda
   let returnValue = {
     courseNumber: courseData.courseNumber,
@@ -63,42 +57,91 @@ exports.handler = async function(event) {
 
   // set a new Array as part of the return value
   returnValue.sections = []
-
+  
   // ask Firebase for the sections corresponding to the Document ID of the course, wait for the response
   let sectionsQuery = await db.collection('sections').where(`courseId`, `==`, courseId).get()
 
   // get the documents from the query
   let sections = sectionsQuery.docs
 
+ //declaring a variable for use in calculating the average course rating
+ let sumCourseRating = 0
+
+ //declaring a variable for use in calculating the number of course reviews
+ let courseReviewCounter = 0
+
   // loop through the documents
   for (let i=0; i < sections.length; i++) {
     // get the document ID of the section
     let sectionId = sections[i].id
-
     // get the data from the section
     let sectionData = sections[i].data()
-    
     // create an Object to be added to the return value of our lambda
     let sectionObject = {}
-
     // ask Firebase for the lecturer with the ID provided by the section; hint: read "Retrieve One Document (when you know the Document ID)" in the reference
     let lecturerQuery = await db.collection('lecturers').doc(sectionData.lecturerId).get()
-
     // get the data from the returned document
     let lecturer = lecturerQuery.data()
-
     // add the lecturer's name to the section Object
     sectionObject.lecturerName = lecturer.name
 
-    // add the section Object to the return value
+
     returnValue.sections.push(sectionObject)
 
-    // 🔥 your code for the reviews/ratings goes here
-  }
 
-  // return the standard response
+  // 🔥🔥🔥🔥🔥🔥 your code for the reviews/ratings goes here🔥🔥🔥🔥🔥🔥
+    // ask Firebase for the reviews corresponding to the Section ID of the course, wait for the response
+    let reviewsQuery = await db.collection('reviews').where(`sectionId`, `==`, sectionId).get()
+    // get the documents from the query
+    let reviews = reviewsQuery.docs
+
+    //declaring a variable for use in calculating the average section rating
+    let avgSecRating = 0
+   
+    // loop through the reviews
+    for (let i=0; i < reviews.length; i++) {
+      // create an Object to be added to the return value of our lambda
+      let reviewsObject = {}
+      // get the data from the review
+      let reviewsData = reviews[i].data()
+      // add the review body to the review object
+      reviewsObject.comment = reviewsData.body
+      // add the rating to the review Object
+      reviewsObject.rating = reviewsData.rating
+      // add the review Object to the sections object
+      returnValue.sections.push(reviewsObject)
+      // add up the section ratings while in the loop for use later
+      avgSecRating += reviewsData.rating
+      } 
+
+      //Count the number of reviews for this particular section
+      let sectionReviewCount = `Number of reviews for section: ${reviews.length}`
+      //Send the section review count to the section object
+      returnValue.sections.push(sectionReviewCount)
+
+      //Calculate the average section rating
+      let averageSecRate = avgSecRating/reviews.length
+      //Take the average section rating and insert into a string
+      let averageSectionRating = `Average Rating of Section: ${averageSecRate}`
+      //Send the average section rating string to the section object
+      returnValue.sections.push(averageSectionRating)
+      //Calculating the sum of the section ratings to find Average Course Rating
+      sumCourseRating += averageSecRate
+
+      //Inserting the Average Course Rating into the Return Value
+      returnValue.averageCourseRating = sumCourseRating/sections.length
+
+      //Counting reviews for the course
+      courseReviewCounter += reviews.length
+
+      //Inserting the total number of course reviews into the Return Value
+      returnValue.totalCourseReviews = courseReviewCounter
+
+}
+// return the standard response
   return {
     statusCode: 200,
     body: JSON.stringify(returnValue)
   }
+
 }
